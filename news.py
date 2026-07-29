@@ -10,17 +10,20 @@ from auth import get_current_user
 import os
 from typing import Annotated
 
-import uuid
+import handle_image
 import json
 from cache import redis_client 
-
+from fastapi import Request
+import limiter
 router = APIRouter(prefix="", tags=["News"])
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/post")
+@limiter.limit("3/minute")
 async def post_news(
+    request:Request,
     date: Annotated[datetime, Form()],
     title: Annotated[str, Form()],
     content: Annotated[str, Form()],
@@ -34,36 +37,7 @@ async def post_news(
             detail="You are not allowed to use this feature"
         )
 
-    image_name = None
-    
-    if image:
-    
-
-        ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp"}
-
-        ext = os.path.splitext(image.filename)[1].lower()
-
-        if ext not in ALLOWED_EXTENSIONS:
-            raise HTTPException(
-            status_code=400,
-            detail="Unsupported file type."
-        )
-        
-        image_name = f"{uuid.uuid4()}{ext}"
-        file_path = os.path.join(UPLOAD_DIR, image_name)
-
-        MAX_SIZE = 5 * 1024 * 1024  
-
-        contents = await image.read()
-
-        if len(contents) > MAX_SIZE:
-            raise HTTPException(
-                status_code=400,
-                detail="Image is too large."
-            )
-
-        with open(file_path, "wb") as buffer:
-            buffer.write(contents)
+    image_name=await handle_image.handle_image(image)
 
     post = NewsModel(
         date=date,
@@ -85,17 +59,22 @@ async def post_news(
 
 
 @router.get("/read", response_model=PaginatedNewsResponse)
+@limiter.limit("10/minutes")
 async def read_news(
+    request: Request,
     page: int = 1,
     limit: int = 10,
     user=Depends(get_current_user),
     db: Session = Depends(get_db)
-):
+):  
+    
     cache_key = f"news:{page}:{limit}"
-
-    cached = redis_client.get(cache_key)
-    if cached:
-        return json.loads(cached) 
+    try:
+        cached = redis_client.get(cache_key)
+    except Exception:
+        cached = None
+        if cached:
+           return json.loads(cached) 
    
     posts = db.query(NewsModel).offset((page - 1) * limit).limit(limit).all()
 
@@ -116,7 +95,9 @@ async def read_news(
     return response
 
 @router.get("/posts/{post_title}", response_model=list[NewsResponse])
+@limiter.limit("5/minutes")
 async def search_news(
+    request:Request,
     post_title: str,
     user=Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -133,7 +114,10 @@ async def search_news(
     return found
     
 @router.post("/comments/")
-async def comment(data:Comments,
+@limiter.limit("10/minute")
+async def comment(
+ request:Request,
+ data:Comments,
  db: Session = Depends(get_db),
  user = Depends(get_current_user)
  ):
@@ -163,6 +147,7 @@ db: Session = Depends(get_db)
     return comments
     
 @router.delete("/delete_news/{news_id}")
+@limiter.limit("10/minute")
 async def delete_news(
 news_id:int,
 db:Session = Depends(get_db),
@@ -193,7 +178,9 @@ user=Depends(get_current_user)
     return{"message":"news deleted"} 
     
 @router.put("/update_news/")
+@limiter.limit("5/minute")
 async def update_news(
+request:Request,
 data:UpdateNews,
 db:Session = Depends(get_db),
 user = Depends(get_current_user)

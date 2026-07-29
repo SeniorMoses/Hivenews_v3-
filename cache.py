@@ -1,7 +1,7 @@
-from redis import Redis
+import os
+from upstash_redis import Redis
 
 redis_client = Redis(
-    host="localhost",
-    port=6379,
-    decode_responses=True
+    url=os.getenv("UPSTASH_REDIS_REST_URL"),
+    token=os.getenv("UPSTASH_REDIS_REST_TOKEN"),
 )

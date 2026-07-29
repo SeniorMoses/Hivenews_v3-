@@ -4,7 +4,28 @@ from database import engine, Base
 import authRouter, news
 from fastapi.staticfiles import StaticFiles
 
- 
+
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+
+
+app = FastAPI()
+
+limiter = Limiter(
+    key_func=get_remote_address
+)
+
+app.state.limiter = limiter
+
+app.add_exception_handler(
+    RateLimitExceeded,
+    _rate_limit_exceeded_handler
+)
+
+app.include_router(authRouter.router)
+app.include_router(news.router)
 
 Base.metadata.create_all(bind=engine)
 

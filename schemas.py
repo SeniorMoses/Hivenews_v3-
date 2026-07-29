@@ -6,7 +6,10 @@ class Signup(BaseModel):
     username: str
     email: EmailStr
     password: str
-
+    
+    class Config:
+        from_attributes= True
+        
     @field_validator("username")
     @classmethod
     def validate_username(cls, val):
@@ -48,6 +51,7 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    message: str
 
 class RefreshRequest(BaseModel):
     refresh_token: str

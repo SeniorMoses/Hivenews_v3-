@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Form, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
@@ -7,39 +7,54 @@ import bcrypt
 from database import get_db
 from models import User, RefreshToken
 from schemas import Signup, TokenResponse, RefreshRequest, LogoutRequest
-from auth import create_access_token, create_refresh_token
+from auth import create_access_token, create_refresh_token, get_current_user
+from fastapi import Request
+import limiter
+
+from typing import Annotated
+from datetime import datetime, timezone
+
+import handle_image
 
 router = APIRouter(prefix="", tags=["Authentication"])
 
 @router.post("/signup")
-async def register(data: Signup, db: Session = Depends(get_db)):
-    existing_user = db.query(User).filter(User.email == data.email).first()
-    if existing_user:
-        raise HTTPException(
-        status_code=400,
-         detail="Email already exists"
-         )
+@limiter.limit("5/minute")
+async def register(
+    request:Request,
+    data:Annotated[Signup, Form()],
+    image: UploadFile | None=File (None),
+    db: Session = Depends(get_db)): 
+        existing_user = db.query(User).filter(User.email == data.email).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=400,
+                detail="Email already exists"
+               )
+        image_name= await handle_image.handle_image(image)
+        hashed = await run_in_threadpool(
+            bcrypt.hashpw,
+            data.password.encode(),
+            bcrypt.gensalt()
+        )
+ 
+        new_user = User(
+            username=data.username,
+            role="user",
+            email=data.email,
+            password=hashed.decode(),
+            image=image_name
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
 
-    hashed = await run_in_threadpool(
-        bcrypt.hashpw,
-        data.password.encode(),
-        bcrypt.gensalt()
-    )
-
-    new_user = User(
-        username=data.username,
-        role="user",
-        email=data.email,
-        password=hashed.decode()
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-
-    return {"message": "Signup successfully 🎉"}
+        return {"message": "Signup successfully 🎉"}
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("3/minute")
 async def signin(
+    request:Request,
     data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
@@ -66,6 +81,19 @@ async def signin(
         "username": user.username,
         "role": user.role
     })
+  
+
+
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == user.id,
+        RefreshToken.revoked.is_(False)
+    ).update(
+        {"revoked": True},
+        synchronize_session=False
+    )
+
+    db.commit()
+
     refresh_token = create_refresh_token(user.id, db)
 
     return {
@@ -74,7 +102,17 @@ async def signin(
         "token_type": "bearer",
         "message": "login succesful"
     }
-
+@router.get("/profile/")
+async def get_profile(
+current_user=Depends(get_current_user),
+db:Session=Depends(get_db)
+):
+    user=db.query(User).filter(User.email==current_user.email).first()
+    return {
+        "username":user.username,
+        "email":user.email,
+        "photo":user.image
+    }
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_access(
     req: RefreshRequest,
