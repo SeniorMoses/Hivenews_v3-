@@ -9,7 +9,7 @@ from models import User, RefreshToken
 from schemas import Signup, TokenResponse, RefreshRequest, LogoutRequest
 from auth import create_access_token, create_refresh_token, get_current_user
 from fastapi import Request
-import limiter
+from limiter import limiter
 
 from typing import Annotated
 from datetime import datetime, timezone
