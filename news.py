@@ -14,7 +14,7 @@ import handle_image
 import json
 from cache import redis_client 
 from fastapi import Request
-import limiter
+from limiter import limiter
 router = APIRouter(prefix="", tags=["News"])
 
 UPLOAD_DIR = "uploads"
