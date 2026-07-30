@@ -22,9 +22,17 @@ router = APIRouter(prefix="", tags=["Authentication"])
 @limiter.limit("5/minute")
 async def register(
     request:Request,
-    data:Annotated[Signup, Form()],
+    username:str=Form(),
+    email:str=Form(),
+    password=str=Form()
     image: UploadFile | None=File (None),
     db: Session = Depends(get_db)): 
+        data=Signup(
+            username=username,
+            email=email,
+            password=password,
+        ) 
+
         existing_user = db.query(User).filter(User.email == data.email).first()
         if existing_user:
             raise HTTPException(
