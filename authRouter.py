@@ -24,7 +24,7 @@ async def register(
     request:Request,
     username:str=Form(),
     email:str=Form(),
-    password=str=Form()
+    password:str=Form(),
     image: UploadFile | None=File (None),
     db: Session = Depends(get_db)): 
         data=Signup(
@@ -115,7 +115,7 @@ async def get_profile(
 current_user=Depends(get_current_user),
 db:Session=Depends(get_db)
 ):
-    user=db.query(User).filter(User.email==current_user.email).first()
+    user=db.query(User).filter(User.id==current_user["id"]).first()
     return {
         "username":user.username,
         "email":user.email,
