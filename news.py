@@ -149,6 +149,7 @@ db: Session = Depends(get_db)
 @router.delete("/delete_news/{news_id}")
 @limiter.limit("10/minute")
 async def delete_news(
+request: Request,
 news_id:int,
 db:Session = Depends(get_db),
 user=Depends(get_current_user)
