@@ -49,8 +49,11 @@ async def post_news(
     db.add(post)
     db.commit()
     db.refresh(post)
-    for key in redis_client.scan_iter("news:*"):
-        redis_client.delete(key)
+    try:
+        for key in redis_client.scan_iter("news:*"):
+            redis_client.delete(key)
+    except Exception:
+        pass
     return {
         "message": "News posted successfully 🎉",
         "news": post
@@ -178,9 +181,12 @@ user=Depends(get_current_user)
 
     db.delete(news)
     db.commit() 
-    for key in redis_client.scan_iter("news:*"):
-        redis_client.delete(key)
-    return{"message":"news deleted"} 
+    try:
+        for key in redis_client.scan_iter("news:*"):
+            redis_client.delete(key)
+        return{"message":"news deleted"} 
+    except Exception:
+        pass
     
 @router.put("/update_news/")
 @limiter.limit("5/minute")
@@ -205,6 +211,10 @@ user = Depends(get_current_user)
     news.content=data.new_content
     db.commit() 
     db.refresh(news)
-    for key in redis_client.scan_iter("news:*"):
-        redis_client.delete(key) 
+    
+    try:
+        for key in redis_client.scan_iter("news:*"):
+            redis_client.delete(key) 
+    except Exception:
+        pass
     return {"message":"news updated"}
