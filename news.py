@@ -184,9 +184,10 @@ user=Depends(get_current_user)
     try:
         for key in redis_client.scan_iter("news:*"):
             redis_client.delete(key)
-        return{"message":"news deleted"} 
     except Exception:
         pass
+    return{"message":"news deleted"} 
+
     
 @router.put("/update_news/")
 @limiter.limit("5/minute")
