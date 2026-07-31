@@ -69,13 +69,15 @@ async def read_news(
 ):  
     
     cache_key = f"news:{page}:{limit}"
+
     try:
         cached = redis_client.get(cache_key)
     except Exception:
         cached = None
-        if cached:
-           return json.loads(cached) 
-   
+
+    if cached:
+        return json.loads(cached)
+
     posts = db.query(NewsModel).offset((page - 1) * limit).limit(limit).all()
 
     response = PaginatedNewsResponse(
@@ -86,14 +88,16 @@ async def read_news(
         data=posts,
     )
 
-    redis_client.setex(
-        cache_key,
-        300,  
-        response.model_dump_json()
-    )
+    try:
+         redis_client.setex(
+            cache_key,
+            300,
+            response.model_dump_json()
+        )
+    except Exception:
+        pass  
 
     return response
-
 @router.get("/posts/{post_title}", response_model=list[NewsResponse])
 @limiter.limit("5/minutes")
 async def search_news(
