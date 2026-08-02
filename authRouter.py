@@ -119,7 +119,8 @@ db:Session=Depends(get_db)
     return {
         "username":user.username,
         "email":user.email,
-        "photo":user.image
+        "photo":user.image,
+        "role":user.role
     }
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_access(
