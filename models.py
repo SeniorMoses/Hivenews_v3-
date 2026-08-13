@@ -30,6 +30,7 @@ class NewsModel(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     date = Column(DateTime, default=datetime.utcnow)  
+    category=Column(String, default="General")
     title = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     image = Column(String, nullable=True)
