@@ -17,14 +17,13 @@ from fastapi import Request
 from limiter import limiter
 router = APIRouter(prefix="", tags=["News"])
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/post")
 @limiter.limit("3/minute")
 async def post_news(
     request:Request,
     date: Annotated[datetime, Form()],
+    category:Annotated[str, Form()],
     title: Annotated[str, Form()],
     content: Annotated[str, Form()],
     image: UploadFile | None = File(None),
@@ -41,6 +40,7 @@ async def post_news(
 
     post = NewsModel(
         date=date,
+        category=category,
         title=title,
         content=content,
         image=image_name
@@ -49,11 +49,8 @@ async def post_news(
     db.add(post)
     db.commit()
     db.refresh(post)
-    try:
-        for key in redis_client.scan_iter("news:*"):
-            redis_client.delete(key)
-    except Exception:
-        pass
+    for key in redis_client.scan_iter("news:*"):
+        redis_client.delete(key)
     return {
         "message": "News posted successfully 🎉",
         "news": post
@@ -81,7 +78,7 @@ async def read_news(
     if cached:
         return json.loads(cached)
 
-    posts = db.query(NewsModel).offset((page - 1) * limit).limit(limit).all()
+    posts = db.query(NewsModel).offset((page - 1) *        limit).limit(limit).all()
 
     response = PaginatedNewsResponse(
         total_items=db.query(NewsModel).count(),
@@ -92,7 +89,7 @@ async def read_news(
     )
 
     try:
-         redis_client.setex(
+        redis_client.setex(
             cache_key,
             300,
             response.model_dump_json()
@@ -101,6 +98,7 @@ async def read_news(
         pass  
 
     return response
+
 @router.get("/posts/{post_title}", response_model=list[NewsResponse])
 @limiter.limit("5/minutes")
 async def search_news(
@@ -156,7 +154,7 @@ db: Session = Depends(get_db)
 @router.delete("/delete_news/{news_id}")
 @limiter.limit("10/minute")
 async def delete_news(
-request: Request,
+request:Request,
 news_id:int,
 db:Session = Depends(get_db),
 user=Depends(get_current_user)
@@ -181,13 +179,9 @@ user=Depends(get_current_user)
 
     db.delete(news)
     db.commit() 
-    try:
-        for key in redis_client.scan_iter("news:*"):
-            redis_client.delete(key)
-    except Exception:
-        pass
+    for key in redis_client.scan_iter("news:*"):
+        redis_client.delete(key)
     return{"message":"news deleted"} 
-
     
 @router.put("/update_news/")
 @limiter.limit("5/minute")
@@ -198,10 +192,10 @@ db:Session = Depends(get_db),
 user = Depends(get_current_user)
 ):
     if user["role"] != "admin":
-        raise HTTPException(
+        raise HTTPException( 
         status_code = 403,
         detail = "user forbidden"
-        )
+        ) 
     news = db.query(NewsModel).filter(NewsModel.id==data.news_id).first()
     if not news:
             raise HTTPException(
@@ -212,10 +206,16 @@ user = Depends(get_current_user)
     news.content=data.new_content
     db.commit() 
     db.refresh(news)
-    
-    try:
-        for key in redis_client.scan_iter("news:*"):
-            redis_client.delete(key) 
-    except Exception:
-        pass
+    for key in redis_client.scan_iter("news:*"):
+        redis_client.delete(key) 
     return {"message":"news updated"}
+   
+@router.get("/filter_news/")
+async def filter_news(
+reauest:Request,
+category:str,
+user=Depends(get_current_user),
+db:Session=Depends(get_db)
+):
+    news=db.query(NewsModel).filter(NewsModel.category==category).all()
+    return news
