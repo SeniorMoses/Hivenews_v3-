@@ -49,8 +49,11 @@ async def post_news(
     db.add(post)
     db.commit()
     db.refresh(post)
-    for key in redis_client.scan_iter("news:*"):
-        redis_client.delete(key)
+    try:
+        for key in redis_client.scan_iter("news:*"):
+            redis_client.delete(key)
+    except Exception:
+        pass
     return {
         "message": "News posted successfully 🎉",
         "news": post
